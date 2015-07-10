@@ -104,7 +104,6 @@ void grasta_step_subsample(float* B, float* x, float* w, int m, int n, float dt,
 	float* smallx;
 	float* smallB;
 	float* pismallB;
-//	float* w=(float*)malloc(n*sizeof(float));
 	float* s=(float*)calloc(use_number,sizeof(float));
 	float* y=(float*)calloc(use_number,sizeof(float));
 

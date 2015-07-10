@@ -13,11 +13,13 @@
 #include <stdio.h>
 #include "larb.h"
 #include "grasta.h"
+#include "stopwatch.h"
 
 
 
 //g++ -I /usr/local/include/opencv/ -L /usr/local/lib/ -lhighgui -lcvaux -lcxcore -L/opt/intel/composerxe-2011.4.191/mkl/lib/intel64  -Wl,--start-group -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -Wl,--end-group -liomp5 -lpthread -lm grasta_cam_test_subsample.cpp -o gcts
 
+// TODO port profiling code
 #define PROFILE_MODE // comment this to remove profiling code
 
 ///////////////////////////////////////////////////////////
@@ -33,11 +35,11 @@ float zero=0.0f;
 float dt=.000001;
 float rho=1;
 float *B,*tB,*pB,*x,*w,*bb,*ff;
-int m,n,ii,jj;
-int hh=360;
-int ww=640;
-m=hh*ww;
-n=9;
+int ii,jj;
+const int hh=360;
+const int ww=640;
+const int m = hh * ww;
+const int n = 9;
 
 B=(float*)malloc(m*n*sizeof(float));
 
@@ -104,6 +106,8 @@ IplImage* outgsf = cvCreateImage(cvSize(ww,hh),IPL_DEPTH_32F,1);
 
 #ifdef PROFILE_MODE
 clock_t start_time(clock());
+CStopWatch watch;
+watch.startTimer();
 #endif
 
 char dtstring[40];
@@ -137,10 +141,12 @@ while( 1 ) {
     x=(float*)outgs->imageData;
 
     #ifdef PROFILE_MODE
-    start_time = clock() - start_time;
-    sprintf(dtstring,"FPS = %.4f", (CLOCKS_PER_SEC/(float)start_time));
+    //start_time = clock() - start_time;
+    watch.stopTimer();
+    sprintf(dtstring,"FPS = %.4f", 1.0 / watch.getElapsedTime());
     cvPutText(outgs,dtstring , cvPoint(10, 60), &font, cvScalar(0, 0, 0, 0));
-    start_time = clock();
+    watch.startTimer();
+    //start_time = clock();
     #endif
 
     sprintf(dtstring,"dt = %.8f",dt);
@@ -171,7 +177,7 @@ while( 1 ) {
     for (ii=0;ii<m;ii++){
         ff[ii]=x[ii]-bb[ii];
         if (fabs(ff[ii])>.05){
-            ff_l1_norm ++;
+            ++ff_l1_norm;
             //ff_l1_norm += fabs(ff[ii]);
         }
     }
