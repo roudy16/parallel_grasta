@@ -1,3 +1,6 @@
+#ifndef LARB_H
+#define LARB_H
+
 #include <cstdlib>
 #include <cstdio>
 
@@ -278,3 +281,5 @@ void larb_no_orthogonal_alt(float* sB,float* B,int m,int n,float* x,float* w, fl
 free(u);
 free(junk);
 }
+
+#endif // LARB_H

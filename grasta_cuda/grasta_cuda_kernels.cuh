@@ -1,3 +1,5 @@
+#ifndef KERNELS_H
+#define KERNELS_H
 #include <math.h>
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
@@ -14,3 +16,5 @@ __global__ void larbOrthAltKernel(float *B,
                                   float *y,
                                   float rho,
                                   float maxiter);
+
+#endif // KERNELS_H

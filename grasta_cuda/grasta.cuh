@@ -1,3 +1,6 @@
+#ifndef GRASTA_MAIN_H
+#define GRASTA_MAIN_H
+
 #include "larb.cuh"
 #include "cublas_v2.h"
 
@@ -309,4 +312,4 @@ U0 = U0 + step;
 }
 
 
-
+#endif // GRASTA_MAIN_H
