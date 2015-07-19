@@ -1,20 +1,5 @@
-#include <opencv/highgui.h>
-#include <string.h>
-#include <opencv/cv.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <iostream>
-#include <ctime>
-#include <time.h>
-#include "math.h"
-#include "mkl.h"
-#include "mkl_blas.h"
-#include <stdlib.h>
-#include <stdio.h>
-#include "larb.h"
 #include "grasta.h"
 #include "stopwatch.h"
-
 
 
 //g++ -I /usr/local/include/opencv/ -L /usr/local/lib/ -lhighgui -lcvaux -lcxcore -L/opt/intel/composerxe-2011.4.191/mkl/lib/intel64  -Wl,--start-group -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -Wl,--end-group -liomp5 -lpthread -lm grasta_cam_test_subsample.cpp -o gcts
@@ -36,8 +21,8 @@ float dt=.000001;
 float rho=1;
 float *B,*tB,*pB,*x,*w,*bb,*ff;
 int ii,jj;
-const int hh=480;
-const int ww=640;
+const int hh=kSCREEN_HEIGHT;
+const int ww=kSCREEN_WIDTH;
 const int m = hh * ww;
 const int n = 9;
 
@@ -164,9 +149,9 @@ while( 1 ) {
     //fprintf(stderr,"use_number=%d\n",use_number);
 
     if (turbo<5) {
-        grasta_step (B,x,w,m,n,dt,rho,20);
+        Grasta::grasta_step (B,x,w,m,n,dt,rho,20);
     }else{
-        grasta_step_subsample (B,x,w,m,n,dt,rho,40,use_index,use_number);
+        Grasta::grasta_step_subsample (B,x,w,m,n,dt,rho,40,use_index,use_number);
     }
 
     sgemv("N",&m,&n,&one,B,&m,w,&oneinc,&zero,bb,&oneinc);
