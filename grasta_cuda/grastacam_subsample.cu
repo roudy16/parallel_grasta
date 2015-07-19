@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "grasta.cuh"
-
+#include "grasta_cuda_random_mask_gen.cuh"
 
 
 //g++ -I /usr/local/include/opencv/ -L /usr/local/lib/ -lhighgui -lcvaux -lcxcore -L/opt/intel/composerxe-2011.4.191/mkl/lib/intel64  -Wl,--start-group -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -Wl,--end-group -liomp5 -lpthread -lm grasta_cam_test_subsample.cpp -o gcts
@@ -36,6 +36,9 @@ int main( int argc, char* argv[] ) {
 
     // Initialize cuBLAS
     if(cublasInit(handle) != CUBLAS_STATUS_SUCCESS){ return -1; }
+
+    // Create sets of random indices 
+    RandomMaskGenerator* pMasks = RandomMaskGenerator::Instance();
 
     srand(time(0));
     float one=1.0f;
@@ -172,6 +175,7 @@ int main( int argc, char* argv[] ) {
         cvPutText(outgs,dtstring , cvPoint(10, 40), &font, cvScalar(0, 0, 0, 0));
         cvShowImage("capture", outgs);
 
+        /*
         rm=sample_percent*((double)RAND_MAX);
         use_number=0;	
         for (ii=0;ii<m;ii++){
@@ -180,12 +184,13 @@ int main( int argc, char* argv[] ) {
                 use_number++;
             }
         }
+        */
         //fprintf(stderr,"use_number=%d\n",use_number);
 
         if (turbo<5) {
             grasta_step (B,x,w,m,n,dt,rho,20,dev_B);
         }else{
-            grasta_step_subsample (B,x,w,m,n,dt,rho,40,use_index,use_number,dev_B);
+            grasta_step_subsample (B,x,w,m,n,dt,rho,40, pMasks->GetRandomMask(), pMasks->GetMaskSize(),dev_B);
         }
 
         sgemv("N",&m,&n,&one,B,&m,w,&oneinc,&zero,bb,&oneinc);

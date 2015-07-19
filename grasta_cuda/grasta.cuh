@@ -88,7 +88,7 @@ void grasta_step (float* B, float* x, float* w, int m, int n, float dt,float rho
 
 
 
-void grasta_step_subsample(float* B, float* x, float* w, int m, int n, float dt,float rho, int maxiter, int* use_index, int use_number,
+void grasta_step_subsample(float* B, float* x, float* w, int m, int n, float dt,float rho, int maxiter, int *use_index, const int use_number,
                            float* dev_B){
 
 	float one=1.0f;
