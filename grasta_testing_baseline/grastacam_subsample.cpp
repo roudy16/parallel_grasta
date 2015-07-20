@@ -1,5 +1,6 @@
 #include "grasta.h"
 #include "stopwatch.h"
+#include "grasta_random_mask_gen.h"
 
 
 //g++ -I /usr/local/include/opencv/ -L /usr/local/lib/ -lhighgui -lcvaux -lcxcore -L/opt/intel/composerxe-2011.4.191/mkl/lib/intel64  -Wl,--start-group -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -Wl,--end-group -liomp5 -lpthread -lm grasta_cam_test_subsample.cpp -o gcts
@@ -28,7 +29,6 @@ const int n = 9;
 
 B=(float*)malloc(m*n*sizeof(float));
 
-
 // seed matrix B with random values
 for (ii=0;ii<m*n;ii++){
 	B[ii]=rand();
@@ -54,6 +54,8 @@ work=(float*)malloc(lwork*sizeof(float));
 
 sgeqrf(&m, &n, B, &m, tau, work, &lwork, &info );
 sorgqr(&m, &n, &n, B, &m, tau, work, &lwork, &info );
+
+RandomMaskGenerator* pMasks = RandomMaskGenerator::Instance();
 
 //cvNamedWindow( "selected location", 1 );
 cvNamedWindow( "capture", 1 );
@@ -138,6 +140,7 @@ while( 1 ) {
     cvPutText(outgs,dtstring , cvPoint(10, 40), &font, cvScalar(0, 0, 0, 0));
     cvShowImage("capture", outgs);
 
+    /*
     rm=sample_percent*((double)RAND_MAX);
     use_number=0;	
     for (ii=0;ii<m;ii++){
@@ -147,11 +150,12 @@ while( 1 ) {
         }
     }
     //fprintf(stderr,"use_number=%d\n",use_number);
+    */
 
     if (turbo<5) {
         Grasta::grasta_step (B,x,w,m,n,dt,rho,20);
     }else{
-        Grasta::grasta_step_subsample (B,x,w,m,n,dt,rho,40,use_index,use_number);
+        Grasta::grasta_step_subsample (B,x,w,m,n,dt,rho,40, pMasks->GetRandomMask(), pMasks->GetMaskSize());
     }
 
     sgemv("N",&m,&n,&one,B,&m,w,&oneinc,&zero,bb,&oneinc);
