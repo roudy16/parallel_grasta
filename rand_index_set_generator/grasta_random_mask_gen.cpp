@@ -21,8 +21,8 @@ int intComp(const void* p1, const void* p2);
 */
 RandomMaskGenerator::RandomMaskGenerator()
     : p_data(nullptr),
-      m_maskSize( (((int)((float)(kSCREEN_HEIGHT * kSCREEN_HEIGHT) * kRANDOMSAMPLEPERCENTAGE)) + 512)
-                 - ((int)((float)(kSCREEN_HEIGHT * kSCREEN_HEIGHT) * kRANDOMSAMPLEPERCENTAGE)) % 512),
+    m_maskSize( (((int)((float)(kSCREEN_HEIGHT * kSCREEN_WIDTH) * kRANDOMSAMPLEPERCENTAGE)) + 512)
+              - ((int)((float)(kSCREEN_HEIGHT * kSCREEN_WIDTH) * kRANDOMSAMPLEPERCENTAGE)) % 512),
       m_gen(std::clock()),
       m_distribution(0, kSCREEN_HEIGHT * kSCREEN_WIDTH)
 {
@@ -108,13 +108,14 @@ void RandomMaskGenerator::PrintDataToFile(const char* filename)
 
     std::ofstream filestream(filename, std::ios_base::out | std::ios_base::binary);
 
-    filestream.write(reinterpret_cast<const char*>(&kSCREEN_WIDTH), sizeof(kSCREEN_WIDTH));
-    filestream.write(reinterpret_cast<const char*>(&kSCREEN_HEIGHT), sizeof(kSCREEN_HEIGHT));
+    filestream.write(reinterpret_cast<const char*>(&kSCREEN_WIDTH), sizeof(&kSCREEN_WIDTH));
+    filestream.write(reinterpret_cast<const char*>(&kSCREEN_HEIGHT), sizeof(&kSCREEN_HEIGHT));
+    filestream.write(reinterpret_cast<const char*>(&m_maskSize), sizeof(&m_maskSize));
     filestream.write(reinterpret_cast<const char*>(&kNUMRANDOMMASKS), sizeof(kNUMRANDOMMASKS));
 
     for(unsigned int i = 0; i < kNUMRANDOMMASKS; ++i)
     {
-        filestream.write(reinterpret_cast<const char*>(p_data + i * m_maskSize),
+        filestream.write(reinterpret_cast<const char*>(&p_data[i * m_maskSize]),
                          m_maskSize * sizeof(int));
     }
 

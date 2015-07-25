@@ -9,6 +9,7 @@ RandMaskInfo& RandMaskInfo::operator=(const RandMaskInfo &rhs)
 
     width = rhs.width;
     height = rhs.height;
+    maskSize = rhs.maskSize;
     numMasks = rhs.numMasks;
     data = rhs.data;
 
@@ -24,14 +25,15 @@ RandMaskInfo RandomMaskReader::ReadMasksFromFile()
 
     ifs.read(reinterpret_cast<char*>(&info.width), sizeof(info.width));
     ifs.read(reinterpret_cast<char*>(&info.height), sizeof(info.height));
+    ifs.read(reinterpret_cast<char*>(&info.maskSize), sizeof(info.maskSize));
     ifs.read(reinterpret_cast<char*>(&info.numMasks), sizeof(info.numMasks));
 
-    info.data = new int[info.width * info.height * info.numMasks];
+    info.data = new int[info.maskSize * info.numMasks];
 
     for(unsigned long long i = 0; i < info.numMasks; ++i)
     {
-        ifs.read( reinterpret_cast<char*>(&info.data[i * info.width * info.height]),
-                  sizeof(int) * info.width * info.height );
+        ifs.read( reinterpret_cast<char*>(&info.data[i * info.maskSize]),
+                  sizeof(int) * info.maskSize);
     }
 
     return info;

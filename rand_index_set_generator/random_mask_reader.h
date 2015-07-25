@@ -7,8 +7,9 @@ struct RandMaskInfo
 {
     unsigned int width;
     unsigned int height;
+    int          maskSize;
     unsigned int numMasks;
-    int* data;
+    int*         data;
 
 private:
     RandMaskInfo& operator=(const RandMaskInfo &rhs);
