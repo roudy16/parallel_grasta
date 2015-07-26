@@ -1,4 +1,5 @@
 #include "grasta.h"
+#include "../rand_index_set_generator/random_mask_reader.h"
 #include "stopwatch.h"
 
 
@@ -54,7 +55,8 @@ work=(float*)malloc(lwork*sizeof(float));
 sgeqrf(&m, &n, B, &m, tau, work, &lwork, &info );
 sorgqr(&m, &n, &n, B, &m, tau, work, &lwork, &info );
 
-RandomMaskGenerator* pMasks = RandomMaskGenerator::Instance();
+RandomMaskReader maskReader;
+RandMaskInfo maskInfo = maskReader.ReadMasksFromFile();
 
 //cvNamedWindow( "selected location", 1 );
 cvNamedWindow( "capture", 1 );
@@ -154,7 +156,7 @@ while( 1 ) {
     if (turbo<5) {
         Grasta::grasta_step (B,x,w,m,n,dt,rho,20);
     }else{
-        Grasta::grasta_step_subsample (B,x,w,m,n,dt,rho,40, pMasks->GetRandomMask(), pMasks->GetMaskSize());
+        Grasta::grasta_step_subsample (B,x,w,m,n,dt,rho,40, maskInfo.GetRandomMask(), maskInfo.maskSize);
     }
 
     sgemv("N",&m,&n,&one,B,&m,w,&oneinc,&zero,bb,&oneinc);

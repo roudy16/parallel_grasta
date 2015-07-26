@@ -11,6 +11,7 @@ struct RandMaskInfo
     unsigned int numMasks;
     int*         data;
 
+    int* GetRandomMask();
 private:
     RandMaskInfo& operator=(const RandMaskInfo &rhs);
 };

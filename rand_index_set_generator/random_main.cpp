@@ -6,13 +6,16 @@
 
 int main()
 {
-    const char* filename = "randomMasks.data";
+    /*const char* filename = "randomMasks.data";
     RandomMaskGenerator* pMasks = RandomMaskGenerator::Instance();
 
     pMasks->PrintDataToFile(filename);
+    */
 
     RandomMaskReader maskReader;
     RandMaskInfo maskInfo = maskReader.ReadMasksFromFile();
+
+    std::ofstream ofs("output.txt");
 
 
     std::cout << "Width: " << maskInfo.width << '\n'
@@ -20,9 +23,9 @@ int main()
               << "Mask Size: " << maskInfo.maskSize << '\n'
               << "Num Masks: " << maskInfo.numMasks << std::endl;
 
-    for(int i = 0; i < 64; ++i)
+    for(unsigned long i = 0; i < maskInfo.maskSize; ++i)
     {
-        std::cout << maskInfo.data[i] << '\n';
+        ofs << maskInfo.data[i] << '\n';
     }
 
     std::cout << std::flush;

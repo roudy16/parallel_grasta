@@ -24,7 +24,7 @@ RandomMaskGenerator::RandomMaskGenerator()
     m_maskSize( (((int)((float)(kSCREEN_HEIGHT * kSCREEN_WIDTH) * kRANDOMSAMPLEPERCENTAGE)) + 512)
               - ((int)((float)(kSCREEN_HEIGHT * kSCREEN_WIDTH) * kRANDOMSAMPLEPERCENTAGE)) % 512),
       m_gen(std::clock()),
-      m_distribution(0, kSCREEN_HEIGHT * kSCREEN_WIDTH)
+      m_distribution(0, kSCREEN_HEIGHT * kSCREEN_WIDTH - 1)
 {
     
     // Allocate memory for all the sample masks and initialize all bits to 1

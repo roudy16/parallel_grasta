@@ -1,4 +1,5 @@
 #include "random_mask_reader.h"
+#include <cstdlib>
 
 RandMaskInfo& RandMaskInfo::operator=(const RandMaskInfo &rhs)
 {
@@ -16,12 +17,17 @@ RandMaskInfo& RandMaskInfo::operator=(const RandMaskInfo &rhs)
     return *this;
 }
 
+int* RandMaskInfo::GetRandomMask()
+{
+    return &data[maskSize * (std::rand() % numMasks)];
+}
+
 RandomMaskReader::RandomMaskReader() : filename("randomMasks.data") {}
 
 RandMaskInfo RandomMaskReader::ReadMasksFromFile()
 {
     RandMaskInfo info;
-    std::ifstream ifs(filename);
+    std::ifstream ifs(filename, std::ios_base::in | std::ios_base::binary);
 
     ifs.read(reinterpret_cast<char*>(&info.width), sizeof(info.width));
     ifs.read(reinterpret_cast<char*>(&info.height), sizeof(info.height));
@@ -35,6 +41,7 @@ RandMaskInfo RandomMaskReader::ReadMasksFromFile()
         ifs.read( reinterpret_cast<char*>(&info.data[i * info.maskSize]),
                   sizeof(int) * info.maskSize);
     }
+    ifs.close();
 
     return info;
 }
