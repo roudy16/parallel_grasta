@@ -3,313 +3,45 @@
 
 #include "larb.cuh"
 #include "cublas_v2.h"
-
-#include <cstdlib>
-#include <cstdio>
+#include "grasta_cuda_kernels.cuh"
 
 
+#define N_VAL 9
 
-void grasta_step (float* B, float* x, float* w, int m, int n, float dt,float rho, int maxiter,
-                  float* dev_B){
+struct DataPtrs {
+    float *B,*x,*w,*bb,*ff, *tau; // CPU
+    int *use_index;
 
-	float one=1.0f;
-	int oneinc=1;
-	float zero=0.0f;
-	int ii,jj;
-	//float* w=(float*)malloc(n*sizeof(float));
-	float* s=(float*)calloc(m,sizeof(float));
-	float* y=(float*)calloc(m,sizeof(float));
-	float* g1=(float*)malloc(m*sizeof(float));
-	float* uw=(float*)malloc(m*sizeof(float));
-	float* g2t=(float*)malloc(n*sizeof(float));
-	float* g2=(float*)malloc(m*sizeof(float));
-	float* g=(float*)malloc(m*sizeof(float));
-	float sigma;
-	float normg;
-	float normw;
-	float cs;
-	float ss;
-
-
-	larb_orthogonal_alt(B,m,n,x,w,s,y,rho,maxiter);
-	//printf("%f\n",w[5]);
-    
-	sgemv("N",&m,&n,&one,B,&m,w,&oneinc,&zero,uw,&oneinc);
-	for(jj=0;jj<m;jj++){
-		g1[jj]=y[jj]+rho*(uw[jj]+s[jj]-x[jj]);
-	}
-
-	sgemv("T",&m,&n,&one,B,&m,g1,&oneinc,&zero,g2t,&oneinc);
-	sgemv("N",&m,&n,&one,B,&m,g2t,&oneinc,&zero,g2,&oneinc);
-
-
-	for(jj=0;jj<m;jj++){
-		g[jj]=g1[jj]-g2[jj];
-	}
-
-	normg=sdot(&m,g,&oneinc,g,&oneinc);
-	normg=sqrt(normg);
-
-	normw=sdot(&n,w,&oneinc,w,&oneinc);
-	normw=sqrt(normw);
-
-	sigma=normg*normw;
-
-	cs=(cos(dt*sigma)-1)/(normw*normw);
-	ss=sin(dt*sigma)/sigma;
-
-	//reuse g1 as temp:
-	for(jj=0;jj<m;jj++){
-		g1[jj]=cs*uw[jj]-ss*g[jj];
-	}
-
-	for(ii=0;ii<m;ii++){//row
-		for(jj=0;jj<n;jj++){//column
-			B[jj*m+ii]=B[jj*m+ii]+g1[ii]*w[jj];
-		}
-	}
-    ///////////////////////////////////////
-
-	free (s);
-	free(y);
-	free(g1);
-	free(uw);
-	free(g2t);
-	free(g2);
-	free(g);
-}
-
-
-
-
-
-
-
-
-
-
-void grasta_step_subsample(float* B, float* x, float* w, int m, int n, float dt,float rho, int maxiter, int *use_index, const int use_number,
-                           float* dev_B){
-
-	float one=1.0f;
-	int oneinc=1;
-	float zero=0.0f;
-	int ii,jj;
+    // Used in grasta_substep
+	float* s;
+	float* y;
 	float* tB;
 	float* smallx;
 	float* smallB;
-	float* pismallB;
-//	float* w=(float*)malloc(n*sizeof(float));
-	float* s=(float*)calloc(use_number,sizeof(float));
-	float* y=(float*)calloc(use_number,sizeof(float));
+    float* pismallB;
+	float* g1;
+	float* uw;
+	float* Uw;
+	float* g2t;
+	float* g2;
+	float* g;
+    float* outFromGpu;
+
+    // Device pointers (GPU)
+    float *dev_B, *dev_x, *dev_w, *dev_bb,
+          *dev_ff, *dev_tau;
+    int   *dev_use_index;
+    float* dev_tB;
+    float* dev_smallx;
+    float* dev_smallB;
+    float* dev_outFromGpu;
+};
 
 
-	float* g1=(float*)malloc(use_number*sizeof(float));
-	float* uw=(float*)malloc(use_number*sizeof(float));
-	float* Uw=(float*)malloc(m*sizeof(float));
-	float* g2t=(float*)malloc(n*sizeof(float));
-	float* g2=(float*)malloc(m*sizeof(float));
-	float* g=(float*)malloc(m*sizeof(float));
-	float sigma;
-	float normg;
-	float normw;
-	float cs;
-	float ss;
-	float scale=0;
-	float fuse_number=(float)use_number;
+void grasta_step (float* B, float* x, float* w, int m, int n, float dt,float rho, int maxiter,
+                  float* dev_B);
 
-
-//	ticks t0 = getticks();
-
-//    fprintf(stderr,"0 in grasta step \n");
-	smallx=(float*)malloc(use_number*sizeof(float));
-	for (ii=0;ii<use_number;ii++){
-		smallx[ii]=x[use_index[ii]];
-		scale=scale+fabs(smallx[ii]);
-	}
-	scale=scale/fuse_number;
-	for (ii=0;ii<use_number;ii++){
-		smallx[ii]=smallx[ii]/scale;
-	}
-
-	smallB=(float*)malloc(use_number*n*sizeof(float));
-	for (jj=0;jj<n;jj++){
-		for (ii=0;ii<use_number;ii++){
-			smallB[jj*use_number+ii]=B[jj*m+use_index[ii]];
-		}
-	}
-
-	tB=(float*)malloc(use_number*n*sizeof(float));
-	for (ii=0;ii<use_number*n;ii++){
-		tB[ii]=smallB[ii];
-	}
-
-//	fprintf(stderr,"1 in grasta step \n");
-
-
-//	ticks t1 = getticks();
-//	fprintf(stderr,"t1=%g\n",elapsed(t0,t1));
-
-
-	pismallB=(float*)malloc(use_number*n*sizeof(float));
-	pinv_qr_m_big(tB,pismallB,use_number,n);
-
-
-larb_no_orthogonal_alt(pismallB,smallB,use_number,n,smallx,w,s,y,rho,maxiter);
-
-
-//	ticks t2 = getticks();
-//	fprintf(stderr,"t2=%g\n",elapsed(t1,t2));
-
-//[s_t, w, ldual, ~] = sparse_residual_pursuit(U_Omega, y_Omega, OPTS)
-
-/*
-	fprintf(stderr,"B[5]=%f\n",B[5]);
-	fprintf(stderr,"w[5]=%f\n",w[5]);
-*/
-
-sgemv("N",&use_number,&n,&one,smallB,&use_number,w,&oneinc,&zero,uw,&oneinc);//uw=B_idx w
-
-	for(jj=0;jj<use_number;jj++){
-		g1[jj]=y[jj]+rho*(uw[jj]+s[jj]-smallx[jj]);//-s?   check me!  todo!!!
-	}
-//gamma_1 = ldual + OPTS.RHO*(U_Omega*w + s_t - y_Omega);
-
-
-
-sgemv("T",&use_number,&n,&one,smallB,&use_number,g1,&oneinc,&zero,g2t,&oneinc);//n x use_number g2t=smallB'*g1
-
-//UtDual_omega = U_Omega' * gamma_1;
-	sgemv("N",&m,&n,&one,B,&m,g2t,&oneinc,&zero,g2,&oneinc);//m x n g2=B*g2t
-								//gamma_2 = U0 * UtDual_omega;
-//	ticks t3 = getticks();
-//	fprintf(stderr,"t3=%g\n",elapsed(t2,t3));
-
-
-	for(jj=0;jj<m;jj++){
-		g[jj]=-g2[jj];
-	}
-	for(jj=0;jj<use_number;jj++){
-		g[use_index[jj]]+=g1[jj];
-	}
-
-/*
-	gamma = zeros(DIM_M,1);
-	gamma(idx) = gamma_1;
-	gamma = gamma - gamma_2;
-*/
-
-
-
-
-
-	normg=sdot(&m,g,&oneinc,g,&oneinc);
-	normg=sqrt(normg);
-
-	normw=sdot(&n,w,&oneinc,w,&oneinc);
-	normw=sqrt(normw);
-
-	sigma=normg*normw;
-/*
-
-	gamma_norm = norm(gamma);
-	w_norm     = norm(w);
-	sG = gamma_norm * w_norm;
-*/
-
-
-/*
-	cs=(cos(dt*sigma)-1)/(normw*normw);
-	ss=sin(dt*sigma)/sigma;
-
-	if ((normw>.01)&&(normw>.01)){
-		//reuse g2 as temp:
-		for(jj=0;jj<use_number;jj++){
-			g2[use_index[jj]]=cs*Uw[jj];
-		}
-		for(jj=0;jj<m;jj++){
-			g2[jj]-=ss*g[jj];//
-		}
-
-		for(ii=0;ii<m;ii++){//row
-			for(jj=0;jj<n;jj++){//column
-				B[jj*m+ii]=B[jj*m+ii]+g2[ii]*w[jj];
-			}
-		}
-	}
-*/
-
-//	ticks t4 = getticks();
-//	fprintf(stderr,"t4=%g\n",elapsed(t3,t4));
-
-cs=0;
-ss=0;
-
-
-
-float* alpha;
-alpha=(float*)calloc(m,sizeof(float));
-
-if (normw>0){
-	cs=(cos(dt*sigma)-1);
-	for (ii=0;ii<n;ii++){
-		alpha[ii]=w[ii]/normw;
-		w[ii]=scale*w[ii];
-	}
-}
-
-float* beta;
-beta=(float*)calloc(m,sizeof(float));
-if (normg>0){
-	for (ii=0;ii<m;ii++){
-		beta[ii]=g[ii]/normg;
-	}
-	ss=sin(dt*sigma);
-}
-
-sgemv("N",&m,&n,&one,B,&m,alpha,&oneinc,&zero,Uw,&oneinc);//Uw=Bw
-
-
-//	ticks t5 = getticks();
-//	fprintf(stderr,"t5=%g\n",elapsed(t4,t5));
-
-
-for(ii=0;ii<m;ii++){//row
-	for(jj=0;jj<n;jj++){//column
-
-B[jj*m+ii]=B[jj*m+ii]+cs*Uw[ii]*alpha[jj]-ss*beta[ii]*alpha[jj];
-	}
-}
-
-
-
-//	ticks t6 = getticks();
-//	fprintf(stderr,"t6=%g\n",elapsed(t5,t6));
-
-
-// Take the gradient step along Grassmannian geodesic.
-/*alpha = w/w_norm;
-beta  = gamma/gamma_norm;
-step = (cos(t)-1)*U0*(alpha*alpha')  - sin(t)*beta*alpha';
-
-U0 = U0 + step;
-*/
-
-	free(alpha);
-	free(beta);
-	free (s);
-	free(y);
-	free(g1);
-	free(uw);
-	free(Uw);
-	free(g2t);
-	free(g2);
-	free(g);
-	free(smallx);
-	free(smallB);
-	free(tB);
-	free(pismallB);
-}
-
+void grasta_step_subsample(int m, int n, float dt,float rho,
+                           int maxiter, int *use_index, const int use_number, DataPtrs& data_ptrs);
 
 #endif // GRASTA_MAIN_H

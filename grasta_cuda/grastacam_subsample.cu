@@ -1,6 +1,8 @@
+#pragma warning(push, 0)
 #include <opencv/highgui.h>
-#include <string.h>
 #include <opencv/cv.h>
+#pragma warning(pop)
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
@@ -12,8 +14,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "grasta.cuh"
-#include "grasta_cuda_random_mask_gen.cuh"
-
+#include "../rand_index_set_generator/random_mask_reader.h"
+#include "../rand_index_set_generator/grasta_random_mask_gen.h"
 
 //g++ -I /usr/local/include/opencv/ -L /usr/local/lib/ -lhighgui -lcvaux -lcxcore -L/opt/intel/composerxe-2011.4.191/mkl/lib/intel64  -Wl,--start-group -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -Wl,--end-group -liomp5 -lpthread -lm grasta_cam_test_subsample.cpp -o gcts
 
@@ -34,75 +36,113 @@ int main( int argc, char* argv[] ) {
         return -1;
     }
 
+    unsigned int device_flags = cudaDeviceScheduleBlockingSync;
+    stat = cudaGetDeviceFlags(&device_flags);
+    if (stat != cudaSuccess) {
+        fprintf(stderr, "setting cuda flags failed!\n");
+        return -1;
+    }
+
     // Initialize cuBLAS
     if(cublasInit(handle) != CUBLAS_STATUS_SUCCESS){ return -1; }
 
-    // Create sets of random indices 
-    RandomMaskGenerator* pMasks = RandomMaskGenerator::Instance();
+    RandomMaskReader maskReader; // It is probably silly for this to be class
+                                 // instead just a function.
+    RandMaskInfo maskInfo = maskReader.ReadMasksFromFile(); // Just call this function
 
-    srand(time(0));
+    DataPtrs data_ptrs;
+    memset(&data_ptrs, 0, sizeof(DataPtrs));
+
+    srand(time(0) & 0xFFFFFFFF);
     float one=1.0f;
     int oneinc=1;
     float zero=0.0f;
 
-    float dt=.000001;
+    float dt=.000001f;
     float rho=1;
 
-    float *B,*tB,*pB,*x,*w,*bb,*ff, *tau; // CPU
-    float *dev_B(NULL), *dev_tB(NULL), *dev_pB(NULL), *dev_x(NULL),
-          *dev_w(NULL), *dev_bb(NULL), *dev_ff(NULL), *dev_tau(NULL); // GPU
-
-    int m,n,ii,jj;
+    int m, n, ii; //jj;
     int hh = kSCREEN_HEIGHT;
     int ww = kSCREEN_WIDTH;
     m=hh*ww;
-    n=9;
+    n= N_VAL;
 
-    B=(float*)malloc(m*n*sizeof(float));
-    w=(float*)malloc(n*sizeof(float));
-    x=(float*)malloc(m*sizeof(float));
-    bb=(float*)malloc(m*sizeof(float));
-    ff=(float*)malloc(m*sizeof(float));
-    tau=(float*)malloc(m*sizeof(float));
+    // TODO Error Checking
+    // Allocate page-locked memory in RAM
+    cudaHostAlloc((void**)&data_ptrs.B, m*n*sizeof(float), cudaHostAllocDefault);
+    cudaHostAlloc((void**)&data_ptrs.w, n*sizeof(float), cudaHostAllocDefault);
+    cudaHostAlloc((void**)&data_ptrs.x, m*sizeof(float), cudaHostAllocDefault);
+    cudaHostAlloc((void**)&data_ptrs.bb, m*sizeof(float), cudaHostAllocDefault);
+    cudaHostAlloc((void**)&data_ptrs.ff, m*sizeof(float), cudaHostAllocDefault);
+    cudaHostAlloc((void**)&data_ptrs.tau, m*sizeof(float), cudaHostAllocDefault);
+    cudaHostAlloc((void**)&data_ptrs.use_index, maskInfo.maskSize*sizeof(int), cudaHostAllocDefault);
 
-    if (cudaMalloc((void**)&dev_B, m * n * sizeof(float)) != cudaSuccess ||
-            cudaMalloc((void**)&dev_w, n * sizeof(float)) != cudaSuccess ||
-            cudaMalloc((void**)&dev_x, m * sizeof(float)) != cudaSuccess ||
-            cudaMalloc((void**)&dev_bb, m * sizeof(float)) != cudaSuccess ||
-            cudaMalloc((void**)&dev_ff, m * sizeof(float)) != cudaSuccess ||
-            cudaMalloc((void**)&dev_tau, m * sizeof(float)) != cudaSuccess)
+    if (cudaMalloc((void**)&data_ptrs.dev_B, m * n * sizeof(float)) != cudaSuccess ||
+            cudaMalloc((void**)&data_ptrs.dev_w, n * sizeof(float)) != cudaSuccess ||
+            cudaMalloc((void**)&data_ptrs.dev_x, m * sizeof(float)) != cudaSuccess ||
+            cudaMalloc((void**)&data_ptrs.dev_bb, m * sizeof(float)) != cudaSuccess ||
+            cudaMalloc((void**)&data_ptrs.dev_ff, m * sizeof(float)) != cudaSuccess ||
+            cudaMalloc((void**)&data_ptrs.dev_tau, m * sizeof(float)) != cudaSuccess ||
+            cudaMalloc((void**)&data_ptrs.dev_use_index, maskInfo.maskSize * sizeof(int)) != cudaSuccess)
     {
         fprintf(stderr, "cudaMalloc failed!");
-        cudaFree(dev_B); // TODO Complete error handling here
+        cudaFree(data_ptrs.dev_B); // TODO Complete error handling here
         return -1;
+    }
+
+    cudaError_t cudaStatus = cudaSuccess;
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.smallx, maskInfo.maskSize * sizeof(float), cudaHostAllocDefault));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.smallB, maskInfo.maskSize * n * sizeof(float), cudaHostAllocDefault));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.tB, maskInfo.maskSize * n * sizeof(float), cudaHostAllocDefault));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.outFromGpu, (maskInfo.maskSize / kBLOCKSIZE) * sizeof(float), cudaHostAllocDefault));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.pismallB, maskInfo.maskSize * n * sizeof(float), cudaHostAllocDefault));
+    if(cudaStatus != cudaSuccess){
+        std::cout << "Error allocating host memory in Grasta substep\n" << std::flush;
+        return -2;
+    }
+    cudaStatus = (cudaError_t)(cudaStatus + cudaMalloc((void**)&data_ptrs.dev_smallx, maskInfo.maskSize * sizeof(float)));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaMalloc((void**)&data_ptrs.dev_smallB, maskInfo.maskSize * n * sizeof(float)));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaMalloc((void**)&data_ptrs.dev_tB, maskInfo.maskSize * n * sizeof(float)));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaMalloc((void**)&data_ptrs.dev_outFromGpu, (maskInfo.maskSize / kBLOCKSIZE) * sizeof(float)));
+    if(cudaStatus != cudaSuccess){
+        std::cout << "Error allocating device memory in Grasta substep\n" << std::flush;
+        return -3;
+    }
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.g1, maskInfo.maskSize*sizeof(float), cudaHostAllocDefault));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.uw, maskInfo.maskSize*sizeof(float), cudaHostAllocDefault));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.Uw, m*sizeof(float), cudaHostAllocDefault));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.g2t, n*sizeof(float), cudaHostAllocDefault));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.g2, m*sizeof(float), cudaHostAllocDefault));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.g, m*sizeof(float), cudaHostAllocDefault));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.s, maskInfo.maskSize*sizeof(float), cudaHostAllocDefault));
+    cudaStatus = (cudaError_t)(cudaStatus + cudaHostAlloc((void**)&data_ptrs.y, maskInfo.maskSize*sizeof(float), cudaHostAllocDefault));
+    if(cudaStatus != cudaSuccess){
+        std::cout << "Error allocating host memory part 2\n" << std::flush;
+        return -4;
     }
 
     // seed matrix B with random values
     for (ii=0;ii<m*n;ii++){
-        B[ii]=rand();
+        data_ptrs.B[ii]=rand() * 1.0f;
     }
 
-    //TODO Error Handling
-    cudaMemcpy(dev_B, B, m * n * sizeof(float), cudaMemcpyHostToDevice);
-
-    float  twork=0;
+    float  twork=0; // while in a split?
     int lwork=-1;
     int info;
 
-    sgeqrf( &m, &n, B, &m, tau, &twork, &lwork, &info);	
+    sgeqrf( &m, &n, data_ptrs.B, &m, data_ptrs.tau, &twork, &lwork, &info);	
     lwork=(int) twork;	
     //	printf("\n lwork=%d\n", lwork );		
     float *work;
     work=(float*)malloc(lwork*sizeof(float));
 
-    sgeqrf(&m, &n, B, &m, tau, work, &lwork, &info );
-    sorgqr(&m, &n, &n, B, &m, tau, work, &lwork, &info );
+    sgeqrf(&m, &n, data_ptrs.B, &m, data_ptrs.tau, work, &lwork, &info );
+    sorgqr(&m, &n, &n, data_ptrs.B, &m, data_ptrs.tau, work, &lwork, &info );
 
     //cvNamedWindow( "selected location", 1 );
     cvNamedWindow( "capture", 1 );
     cvNamedWindow( "background?", 1 );
     cvNamedWindow( "foreground?", 1 );
-
 
     CvCapture* capture = cvCreateCameraCapture(1);
     if(!capture){
@@ -114,12 +154,8 @@ int main( int argc, char* argv[] ) {
 	    }
     }   
 
-
-
-
     CvFont font;
     cvInitFont(&font, CV_FONT_HERSHEY_SIMPLEX, .5, .5, 0, 1, CV_AA);
-
 
     IplImage* frame;
     frame = cvQueryFrame(capture);
@@ -139,18 +175,10 @@ int main( int argc, char* argv[] ) {
     char dtstring[40];
     int c;
 
-    int names_count=0;
-    int classno=0;
-
     double sample_percent=.1;
-    double  rm=double(RAND_MAX);
+    //double  rm=double(RAND_MAX);
 
-    int use_number;
-    int* use_index;
-    use_index=(int*)malloc(m*sizeof(int));
-
-    int tcount=0;
-
+    //int tcount=0;
     int turbo=0;
     float ff_l1_norm=0;
     while( 1 ) {
@@ -162,7 +190,7 @@ int main( int argc, char* argv[] ) {
         cvCvtScale(outbw,outg,.0039,0);//scale to 1/255
         cvResize(outg,outgs);
 
-        x=(float*)outgs->imageData;
+        data_ptrs.x=(float*)outgs->imageData;
 
         #ifdef PROFILE_MODE
         start_time = clock() - start_time;
@@ -187,20 +215,27 @@ int main( int argc, char* argv[] ) {
         */
         //fprintf(stderr,"use_number=%d\n",use_number);
 
+        // TODO Error Handling
+        // Transfer data from CPU RAM to VRAM
+        data_ptrs.use_index = maskInfo.GetRandomMask();
+        cudaMemcpy(data_ptrs.dev_use_index, data_ptrs.use_index, maskInfo.maskSize * sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(data_ptrs.dev_B, data_ptrs.B, m * n * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpy(data_ptrs.dev_x, data_ptrs.x, m * sizeof(float), cudaMemcpyHostToDevice); // Image data
+
         if (turbo<5) {
-            grasta_step (B,x,w,m,n,dt,rho,20,dev_B);
+            grasta_step (data_ptrs.B,data_ptrs.x,data_ptrs.w,m,n,dt,rho,20,data_ptrs.dev_B);
         }else{
-            grasta_step_subsample (B,x,w,m,n,dt,rho,40, pMasks->GetRandomMask(), pMasks->GetMaskSize(),dev_B);
+            grasta_step_subsample (m,n,dt,rho,40, data_ptrs.use_index, maskInfo.maskSize, data_ptrs);
         }
 
-        sgemv("N",&m,&n,&one,B,&m,w,&oneinc,&zero,bb,&oneinc);
+        sgemv("N",&m,&n,&one,data_ptrs.B,&m,data_ptrs.w,&oneinc,&zero,data_ptrs.bb,&oneinc);
 
         // TODO examine what this loop is actually checking for -Steve
         // Update: looks like checking for changes in the L1 norm
         ff_l1_norm=0;	
         for (ii=0;ii<m;ii++){
-            ff[ii]=x[ii]-bb[ii];
-            if (fabs(ff[ii])>.05){
+            data_ptrs.ff[ii]=data_ptrs.x[ii]-data_ptrs.bb[ii];
+            if (fabs(data_ptrs.ff[ii])>.05){
                 ff_l1_norm ++;
                 //ff_l1_norm += fabs(ff[ii]);
             }
@@ -219,18 +254,16 @@ int main( int argc, char* argv[] ) {
         }*/
 
 
-        outgsb->imageData = (char*)bb;
+        outgsb->imageData = (char*)data_ptrs.bb;
         outgsb->imageDataOrigin = outgsb->imageData;
         cvShowImage( "background?", outgsb);
 
-        outgsf->imageData = (char*)ff;
+        outgsf->imageData = (char*)data_ptrs.ff;
         outgsf->imageDataOrigin = outgsf->imageData;
         cvNormalize(outgsf, outgsf,1,0,CV_MINMAX);
         cvShowImage( "foreground?", outgsf);
 
-        //printf("%f\n",bb[556]);
-        c = cvWaitKey(10);
-        //c = cvWaitKey(80);
+        c = cvWaitKey(5);
         if( (char)c == 27 )
             break;
         switch( (char) c )
@@ -256,7 +289,7 @@ int main( int argc, char* argv[] ) {
         }
     } // End Frame Loop
 
-    free(use_index);
+    // TODO Deallocate Memory
 }
 
 

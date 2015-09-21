@@ -1,6 +1,8 @@
+#pragma warning(push, 0)
 #include <opencv/highgui.h>
-#include <string.h>
 #include <opencv/cv.h>
+#pragma warning(pop)
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>

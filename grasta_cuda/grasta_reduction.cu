@@ -1,3 +1,4 @@
+/*
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -70,3 +71,4 @@ Error:
     
     return cudaStatus;
 }
+*/

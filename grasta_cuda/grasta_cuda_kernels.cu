@@ -18,3 +18,23 @@ __global__ void larbOrthAltKernel(float *B,
         
     }
 }
+
+
+__global__ void setupSparseKernel_2(int use_number,
+                                    int m,
+                                    int n,
+                                    float scale,
+                                    float *smallx,
+                                    float *smallB,
+                                    float *B,
+                                    int   *use_index)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    smallx[i] = smallx[i] / scale;
+
+    __syncthreads();
+
+    for(int j = 0; j < n; ++j){
+        smallB[ j * use_number + i ] = B[ j * m + use_index[i]];
+    }
+}

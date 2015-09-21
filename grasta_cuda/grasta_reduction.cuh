@@ -1,6 +1,6 @@
 #ifndef REDUCTION_H
 #define REDUCTION_H
-
+/*
 #include "grasta_cuda_util.cuh"
 
 // Keep this a multiple of 32
@@ -63,3 +63,4 @@ __global__ void simple_reduce(float *g_idata, float *g_odata, unsigned int n)
     if(tid == 0) g_odata[blockIdx.x] = sdata[0];
 }
 #endif //REDUCTION_H
+*/

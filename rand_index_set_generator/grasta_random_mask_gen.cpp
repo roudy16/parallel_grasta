@@ -21,10 +21,9 @@ int intComp(const void* p1, const void* p2);
 */
 RandomMaskGenerator::RandomMaskGenerator()
     : p_data(nullptr),
-    m_maskSize( (((int)((float)(kSCREEN_HEIGHT * kSCREEN_WIDTH) * kRANDOMSAMPLEPERCENTAGE)) + 512)
-              - ((int)((float)(kSCREEN_HEIGHT * kSCREEN_WIDTH) * kRANDOMSAMPLEPERCENTAGE)) % 512),
-      m_gen(std::clock()),
-      m_distribution(0, kSCREEN_HEIGHT * kSCREEN_WIDTH - 1)
+    m_maskSize( kSUBSAMPLE_SIZE ),
+    m_gen(std::clock()),
+    m_distribution(0, kSCREEN_HEIGHT * kSCREEN_WIDTH - 1)
 {
     
     // Allocate memory for all the sample masks and initialize all bits to 1

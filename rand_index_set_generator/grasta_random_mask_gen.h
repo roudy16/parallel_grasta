@@ -3,12 +3,19 @@
 
 #include <random>
 
-const float kRANDOMSAMPLEPERCENTAGE = 0.1f; // The percentage of total number if scalar values that
+#define RANDOMSAMPLEPERCENT 0.1f
+#define SCREEN_WIDTH 640
+#define SCREEN_HEIGHT 480
+#define NUM_MASKS 1024
+
+const float kRANDOMSAMPLEPERCENTAGE = RANDOMSAMPLEPERCENT; // The percentage of total number if scalar values that
                                             // are selected in each random mask
 
-const unsigned int kSCREEN_HEIGHT  = 480;
-const unsigned int kSCREEN_WIDTH   = 640;
-const unsigned int kNUMRANDOMMASKS = 1024; // The number of random masks to produce when program starts
+const unsigned int kSCREEN_HEIGHT  = SCREEN_HEIGHT;
+const unsigned int kSCREEN_WIDTH   = SCREEN_WIDTH;
+const unsigned int kNUMRANDOMMASKS = NUM_MASKS; // The number of random masks to produce when program starts
+const int kSUBSAMPLE_SIZE = (((int)((float)(SCREEN_HEIGHT * SCREEN_WIDTH) * RANDOMSAMPLEPERCENT)) + 512)
+    - ((int)((float)(SCREEN_HEIGHT * SCREEN_WIDTH) * RANDOMSAMPLEPERCENT)) % 512;
 
 /*  This class will generate a number of random masks that are used to select the indices for
     the scalar values that are chosen for each grasta subsample. The intention of these masks
@@ -19,7 +26,7 @@ class RandomMaskGenerator
 public:
     static RandomMaskGenerator* Instance();
     int* GetRandomMask();
-    const int GetMaskSize();
+    int GetMaskSize();
     void PrintDataToFile(const char* filename);
 
 private:
